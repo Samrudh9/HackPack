@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.env
+venv/
+.venv/
+.streamlit/
+*.log
+build/
+dist/
+*.egg-info/
+outputs/
+generated/
+# Generated decks are ignored except the deliberately committed example.
+*.pptx
+!sample_output/*.pptx
+*.zip
