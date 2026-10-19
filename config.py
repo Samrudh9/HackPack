@@ -39,7 +39,11 @@ class Settings(BaseSettings):
 
     # --- API ---------------------------------------------------------------
     # Comma-separated exact origins, e.g. "http://localhost:5173,https://myapp.lovable.app"
-    CORS_ALLOW_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:8501"
+    CORS_ALLOW_ORIGINS: str = (
+        "http://localhost:3000,http://127.0.0.1:3000,"
+        "http://localhost:3001,http://127.0.0.1:3001,"
+        "http://localhost:5173,http://127.0.0.1:5173,http://localhost:8501"
+    )
     REQUEST_TIMEOUT_SECONDS: int = 180
     MAX_REQUEST_BODY_BYTES: int = 2_000_000
 

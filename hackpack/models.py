@@ -102,6 +102,7 @@ class HackathonBrief(BaseModel):
 
 class TeamContext(BaseModel):
     problem_statement: str = Field(default="", max_length=2000)
+    solution_summary: str = Field(default="", max_length=2000)
     target_users: str = Field(default="", max_length=1000)
     key_results: Optional[str] = Field(default=None, max_length=2000)
     impact_claims: list[str] = Field(default_factory=list, max_length=20)

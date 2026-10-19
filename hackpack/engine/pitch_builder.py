@@ -182,6 +182,7 @@ def build_fallback_pitch(
     tech_line = "Uses " + ", ".join(techs) if techs else "No dependency manifests were detected during analysis"
 
     problem_source = team.problem_statement.strip() or "Team has not provided a problem statement yet."
+    solution_source = team.solution_summary.strip()
     users_source = team.target_users.strip() or "Team has not specified target users yet."
     results_source = (team.key_results or "").strip()
     future_source = (team.future_plans or "").strip() or "Team has not described next steps yet."
@@ -206,7 +207,9 @@ def build_fallback_pitch(
             slide_number=2,
             title="Our solution",
             bullet_points=[
-                _truncate_text(evidence.description, 200) or "Project description missing; describe the prototype in one sentence.",
+                _truncate_text(solution_source, 200)
+                or _truncate_text(evidence.description, 200)
+                or "Project description missing; describe the prototype in one sentence.",
                 f"Built for: {users_source[:200]}",
             ],
             speaker_notes="Describe the prototype and who it serves. Keep it concrete and avoid unsupported impact claims.",

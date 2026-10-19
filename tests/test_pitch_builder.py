@@ -88,6 +88,14 @@ def test_fallback_flags_missing_team_input():
                for slide in deck.slides for b in slide.bullet_points)
 
 
+def test_fallback_uses_team_solution_summary_on_solution_slide():
+    team = TeamContext(solution_summary="Riders get a rebalancing suggestion in one tap.")
+    deck = build_fallback_pitch(sample_evidence(), HackathonBrief(), team)
+    solution_slide = deck.slides[1]
+    assert solution_slide.title == "Our solution"
+    assert any("rebalancing suggestion" in bullet for bullet in solution_slide.bullet_points)
+
+
 # --- AI path post-processing ------------------------------------------------
 
 

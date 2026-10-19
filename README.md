@@ -29,7 +29,7 @@ HackPack works for **any hackathon domain, language, or project type**. Its cent
 ```text
                         ┌────────────────────────────────────────────┐
                         │  Frontends                                  │
-                        │  • Lovable React app (primary, over HTTP)  │
+                        │  • React app in frontend/ (primary, HTTP)   │
                         │  • Optional local Streamlit UI              │
                         └───────────────┬────────────────────────────┘
                                         │ HTTP (JSON / ZIP)
@@ -78,6 +78,19 @@ Open **http://localhost:8000/docs** for interactive API documentation. Verify th
 ```bash
 curl http://localhost:8000/api/health
 ```
+
+### Run the web frontend
+
+The React app in `frontend/` (React 19 + TanStack Start + Vite) drives the whole pipeline: analyze → backend pitch → review/edit → ZIP download.
+
+```bash
+cd frontend
+npm install
+cp .env.example .env     # VITE_API_BASE_URL defaults to http://localhost:8000
+npm run dev              # http://localhost:3000
+```
+
+Keep the backend running in another terminal — the default CORS allow-list already includes `http://localhost:3000`. Frontend scripts: `npm run dev`, `npm run typecheck` (`vite build` + `tsc --noEmit`), `npm test` (vitest). See [`frontend/README.md`](frontend/README.md).
 
 ### Optional: local model on an 8 GB laptop
 
@@ -134,18 +147,32 @@ curl -s -X POST localhost:8000/api/analyze -H 'Content-Type: application/json' \
 # feed evidence.evidence plus your brief/team into /api/pitch, then the deck into /api/generate
 ```
 
-## Connecting the Lovable frontend
+## Frontend (`frontend/`)
 
-1. Run the backend locally: `uvicorn api.main:app --reload` (default `http://localhost:8000`).
-2. Add your Lovable app's exact origin to `.env` (wildcards are rejected by design):
+The shipped React app exercises all three endpoints and treats the backend as the source of truth for claim labels:
 
-   ```env
-   CORS_ALLOW_ORIGINS=http://localhost:5173,https://your-app.lovable.app
-   ```
+1. **Analyze** — `POST /api/analyze`, then normalizes the evidence (tech stack, tests/CI/Docker badges, demo URLs, analyzer warnings).
+2. **Generate pitch** — `POST /api/pitch` with the form mapped onto `HackathonBrief` + `TeamContext`. The returned six-slide deck is authoritative, including the verifier-assigned `evidence_type` label on every claim. If the pitch call fails, the app falls back to a clearly-labelled in-browser draft and states so in the warnings; it never pretends the backend produced it.
+3. **Review** — slides are editable. The cover shows whether the draft is `ai` (backend model, claims verified server-side) or `fallback` (deterministic template or local draft).
+4. **Export** — the edited deck is sanitized to the backend's validation limits (six slides, clamped speaking times, valid evidence enums) and sent to `POST /api/generate`; the returned ZIP is offered as a download.
 
-3. Restart the backend. A deployed Lovable app **cannot** reach `localhost` on your machine — for shared demos, deploy the backend (Render/Railway/Fly.io are fine for a single container) and use the public backend URL in the frontend, plus its origin in `CORS_ALLOW_ORIGINS`.
+Frontend environment (`frontend/.env`, copied from `frontend/.env.example`):
 
-Paste this prompt into Lovable:
+| Variable | Default | Description |
+|---|---|---|
+| `VITE_API_BASE_URL` | empty (same origin) | Backend base URL, e.g. `http://localhost:8000` |
+| `VITE_API_HEALTH_PATH` | `/api/health` | Health endpoint path |
+| `VITE_API_ANALYZE_PATH` | `/api/analyze` | Repository analysis path |
+| `VITE_API_PITCH_PATH` | `/api/pitch` | Evidence-to-pitch path |
+| `VITE_API_GENERATE_PATH` | `/api/generate` | Deliverable ZIP path |
+| `VITE_API_TIMEOUT_MS` | `90000` | Request timeout; keep it above `ANALYSIS_TIME_BUDGET_SECONDS` |
+| `VITE_OPEN_SOURCE_REPO_URL` | empty | Optional source-repo link shown in the header |
+
+CORS uses **exact** origins only. The defaults cover local development on ports 3000, 3001, 5173, and 8501; add your deployed frontend origin to `CORS_ALLOW_ORIGINS` before shipping. A deployed frontend **cannot** reach `localhost` on your machine — for shared demos, deploy the backend (a single container on Render/Railway/Fly.io is enough), set `VITE_API_BASE_URL` to the public URL, and add the frontend origin to `CORS_ALLOW_ORIGINS`.
+
+### Building your own frontend (Lovable prompt)
+
+Paste this prompt into Lovable if you'd rather generate a separate UI:
 
 ```text
 Build a single-page web app called "HackPack" that generates hackathon pitch deliverables
@@ -160,7 +187,7 @@ from a GitHub repository. It talks to a FastAPI backend with these exact endpoin
     Errors: 400 {detail: string}, 422 FastAPI validation error.
 - POST {BASE_URL}/api/pitch  body {evidence, brief: {event_name, theme,
     judging_criteria: string[], pitch_duration_minutes, additional_rules},
-    team: {problem_statement, target_users, key_results, impact_claims: string[],
+    team: {problem_statement, solution_summary, target_users, key_results, impact_claims: string[],
     future_plans, team_members: string[]}}
     -> {deck: {project_name, tagline, slides: [{slide_number, title, subtitle,
     bullet_points: string[], speaker_notes, speaking_time_seconds,
@@ -207,7 +234,7 @@ Copy `.env.example` to `.env`. Highlights:
 | `GITHUB_TOKEN` | empty | Optional; raises anonymous GitHub rate limits |
 | `MAX_FILES_TO_ANALYZE` | `50` | Repository traversal bound |
 | `ANALYSIS_TIME_BUDGET_SECONDS` | `60` | Wall-clock cap for one analysis |
-| `CORS_ALLOW_ORIGINS` | localhost origins | Comma-separated **exact** origins; wildcards rejected |
+| `CORS_ALLOW_ORIGINS` | dev origins on ports 3000, 3001, 5173, 8501 | Comma-separated **exact** origins; wildcards rejected |
 | `MAX_REQUEST_BODY_BYTES` | `2000000` | Request size guard (413) |
 | `SAVE_GENERATED_ZIPS` | `false` | Keep a debug copy of each ZIP under `OUTPUT_DIR` |
 
@@ -233,10 +260,19 @@ An internet-facing deployment needs abuse protection (rate limiting, auth, a rev
 ## Tests
 
 ```bash
-python -m pytest tests/ -v
+python -m pytest tests/ -v      # core library + API (98 tests, offline)
+cd frontend && npm test         # frontend unit + contract mapping (21 tests)
+cd frontend && npm run typecheck
 ```
 
-The suite (97 tests) runs without a GitHub token, API key, network access, or an installed model. All provider and network calls are mocked.
+Both suites run without a GitHub token, API key, network access, or an installed model — provider and network calls are mocked in the default run.
+
+The frontend suite also includes an opt-in live end-to-end contract test that drives the real frontend mapping code against a running backend (analyze → pitch → generate):
+
+```bash
+# with `uvicorn api.main:app` running on :8000
+cd frontend && HACKPACK_LIVE_API=1 npm test
+```
 
 ## Repository layout
 
@@ -256,6 +292,11 @@ HackPack/
 │   │   └── evidence_store.py
 │   └── generators/            # pptx · script · demo · zip bundle
 ├── app/main.py                # optional local Streamlit UI
+├── frontend/                  # React 19 + TanStack Start web app
+│   ├── src/lib/api.ts         # typed API client + contract mapping
+│   ├── src/lib/workflow.ts    # step gating + local draft fallback
+│   ├── src/routes/index.tsx   # four-step workspace UI
+│   └── tests/                 # vitest unit + opt-in live E2E
 ├── config.py                  # pydantic-settings configuration
 ├── scripts/make_sample_output.py
 ├── tests/                     # pytest suite (offline)
